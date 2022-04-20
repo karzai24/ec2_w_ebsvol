@@ -1,0 +1,73 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudFormation template for AMI deployment
+Parameters:
+  MyKeyPair:
+    Type: String
+    Default: MyKeyPair
+
+Resources:
+
+  MyEC2Instance: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: "ami-0b36cd6786bcfe120"
+      InstanceType: t2.micro
+      KeyName: !Ref MyKeyPair
+      SecurityGroupIds: 
+        - !Ref MySecurityGroup
+      UserData:
+        Fn::Base64: 
+          !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd.x86_64
+            systemctl start httpd.service
+            systemctl enable httpd.service
+            mkfs -t ext4 /dev/sdm
+            echo "/dev/sdm       /var/www/html/   ext4    defaults,nofail 0       2" >> /etc/fstab
+            mount -a
+            echo Hello AWS World > /var/www/html/index.html
+      BlockDeviceMappings: 
+      - DeviceName: "/dev/sdm"
+        Ebs: 
+          VolumeType: "gp2"
+          DeleteOnTermination: "false"
+          VolumeSize: "1"
+
+  MySecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: vpc-0bb048fd122071a48
+      GroupDescription: SG to allow SSH access via port 22
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: '172.88.41.195/32'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: EC2-SG
+
+  NewVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      Size: 1
+      AvailabilityZone: !GetAtt MyEC2Instance.AvailabilityZone
+      Tags:
+        - Key: MyTag
+          Value: MyVolume
+    DeletionPolicy: Snapshot
+
+  MyEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      InstanceId: !Ref MyEC2Instance
